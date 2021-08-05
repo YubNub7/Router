@@ -1,0 +1,35 @@
+interface FastEthernet0/0
+!
+interface FastEthernet0/1
+ description OUT FOR CIS1-VPN1 
+ ip address dhcp
+ no ip redirects
+ no ip unreachables
+ no ip proxy-arp
+ ip mtu 1410
+ ip nat outside
+ ip virtual-reassembly in
+ zone-member security ISPWAN
+ ip tcp adjust-mss 1370
+ duplex auto
+ speed auto
+ crypto map BR-MAP
+!
+interface FastEthernet0/2
+ description CT VLAN
+ switchport access vlan 10
+ no ip address
+ no cdp enable
+!
+interface FastEthernet0/3
+ description FLEX COA
+ switchport access vlan 60
+ switchport voice vlan 200
+ no ip address
+!
+interface FastEthernet0/4
+ description FLEX COA
+ switchport access vlan 20
+ switchport voice vlan 200
+ no ip address
+!
