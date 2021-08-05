@@ -1,0 +1,989 @@
+---
+#This is the main variable file for JBN. It will be overwritten when external orgs
+#bring in their variables.
+enclave: Jbn
+device_type: "{{ item.value.device_type }}"
+
+#Assorted variables
+hostname: "{{ item.value.hostname }}"
+tun_source: "{{ item.value.tun_source | default('') }}"
+JDI_tun_source: "{{ item.value.jdi_tun_source | default('') }}"
+#replaces dun_dmvpn_int
+ISP_tun_source: "{{item.value.dun_dmvnp_int | default('') }}"
+manet_ip: "{{ item.value.manet_ip | default('') }}"
+jdi_isakmp_key: "{{ item.value.jdi_isakmp_key | default('') }}"
+
+#This is for your ISP IP space. subnet mask default is JCU's standard
+ISP_network: "{{ item.value.isp_network | default('192.168.0.1') }}"
+ISP_mask: "{{ item.value.isp_mask | default('192.168.0.1') }}"
+ISP_last_usable: "{{ (ISP_network + '/' + ISP_mask) | ipaddr('net') | ipaddr('last_usable') | default('') }}"
+ISP_ACL_host_mask: "{{ (ISP_network+'/'+( ISP_mask)) | ipaddr('net') | ipaddr('hostmask') | default('') }}"
+
+#This is for your JDI Data IP space. subnet mask default is JCU's standard
+JDI_DATA_network: "{{ item.value.JDI_data_network | default('') }}"
+JDI_DATA_mask: "{{ item.value.JDI_data_mask | default('192.168.0.1') }}"
+JDI_DATA_last_usable: "{{ (JDI_DATA_network + '/' + JDI_DATA_mask) | ipaddr('net') | ipaddr('last_usable') | default('') }}"
+JDI_DATA_ACL_host_mask: "{{ (JDI_DATA_network+'/'+(JDI_DATA_mask)) | ipaddr('net') | ipaddr('hostmask') | default('') }}"
+
+#This is for your JDI Voice IP space. subnet mask default is JCU's standard
+JDI_VOICE_network: "{{ item.value.JDI_voice_network | default('') }}"
+JDI_VOICE_mask: "{{ item.value.JDI_voice_mask | default('192.168.0.1') }}"
+JDI_VOICE_last_usable: "{{ (JDI_VOICE_network + '/' + JDI_VOICE_mask) | ipaddr('net') | ipaddr('last_usable') | default('') }}"
+
+#This is for your VLAN 10 IP space. subnet mask default is JCU's standard
+JBNCT_network: "{{ item.value.vlan10_network | default('')}}"
+JBNCT_mask: "{{ item.value.vlan10_mask | default('192.168.0.1') }}"
+JBNCT_last_usable: "{{ (JBNCT_network+ '/' + JBNCT_mask) | ipaddr('net') | ipaddr('last_usable') | default('') }}"
+JBNCT_ACL_hostmask: "{{ (JBNCT_network+'/'+(JBNCT_mask)) | ipaddr('net') | ipaddr('hostmask') | default('') }}"
+JBNCT_interface: "{{ 'Ethernet0/1.10' if device_type == 'mfs_router' else 'Vlan 10'}}"
+pvtnet_sub: "{{ item.value.pvtnet_sub | default ('') }}"
+
+MGMT_network: "{{ item.value.mgmt_network | default('192.168.0.1') }}"
+MGMT_mask: "{{ item.value.mgmt_mask | default('192.168.0.1') }}"
+MGMT_last_usable: "{{ MGMT_network | ipmath(1) | default('') }}"
+
+#This is used for the switches
+mgmt_ip: "{{ item.value.mgmt_ip | default('') }}"
+default_gw: "{{ item.value.default_gw | default('') }}"
+
+subints: '{{ item.value.sub_int | default({"JBNCT":"10", "JMET":"20", "AIR":"25", "ISP":"60", "MANET":"85", "SCPC":"90", "JDI_VOICE":"100", "JDI_VOICE":"200" }) }}'
+#Below variables and Dictionary are used for DHCP pools
+isp_dns:
+  - 192.168.0.1
+  - 192.168.0.1
+  - 192.168.0.1
+  - 192.168.0.1
+
+JDI_dns: 
+  - 192.168.0.1
+  - 192.168.0.1
+
+option_150:
+  - 192.168.0.1
+  - 192.168.0.1
+  - 192.168.0.1
+  - 192.168.0.1
+
+#HQ NTP Servers
+ntp:
+  - 0.0.0.0
+  - 0.0.0.0 
+  - 0.0.0.0
+  - 0.0.0.0 
+  - 0.0.0.0
+
+tacacs_source: tacacsSource
+
+#This was added due to issues using the {% set %} in the .j2 templates
+#Used for no spanning-tree on Vlans.
+reqNoSpan: 
+  - 20
+  - 25
+  - 85
+  - 90
+
+reqNoSpanlite:
+  - 20
+
+reqNoSpanxpack:
+  - 20
+  - 85
+
+#This was added due to issues using the {% set %} in the .j2 templates
+required_pools:
+  - 'JDI_DATA'
+  - 'JDI_VOICE'
+  - "{{ 'MGMT' if device_type == 'mfs_router' else '' }}"
+  - 'ISP'
+
+DHCP:
+  exclude:
+    - "{{ '192.168.0.1' if device_type == 'mfs_router' else '' }}"
+    - "{{ '192.168.0.1' if device_type == 'mfs_router' else '' }}"
+    - "ip dhcp excluded-address vrf JDI {{ JDI_DATA_last_usable }}"
+    - "ip dhcp excluded-address vrf JDI {{ JDI_VOICE_last_usable }}"
+    - "{{ (' '.join(['ip dhcp excluded-address vrf ISP', ISP_last_usable])) if 'xpack' not in device_type else '' }}"
+  pools:
+    JDI_DATA:
+      - "dns-server {{ JDI_dns | join(' ') }}"
+      - vrf JDI
+    JDI_VOICE:
+      - "dns-server {{ JDI_dns | join(' ') }}"
+      - "option 150 ip {{ option_150 | join(' ') }}"
+      - vrf JDI
+    ISP:
+      - "dns-server {{ isp_dns | join(' ') }}"
+    MGMT:
+      - vrf MGMT
+
+#EIGRP key dict
+EIGRP_KEYS:
+  Jbn-Wan:
+    18:
+      eigrp_key: EIGRP_KEY
+      time: 00:01:00 Sep 1 2019 01:00:00 Mar 1 2020
+    19:
+      eigrp_key: EIGRP_KEY
+      time: 00:01:00 Mar 1 2020 01:00:00 Sep 1 2020
+    20:
+      eigrp_key: EIGRP_KEY
+      time: 00:01:00 Sep 1 2020 01:00:00 Mar 1 2021
+    9989:
+      eigrp_key: EIGRP_KEY
+      time: 00:01:00 Mar 1 2021 infinite
+    9990:
+      eigrp_key: EIGRP_KEY
+      time: 00:01:00 Mar 1 2020 infinite
+  Jdi-Wan:
+    17:
+      eigrp_key: EIGRP_KEY
+      time: 00:01:00 Sep 1 2019 01:00:00 Mar 1 2020
+    18:
+      eigrp_key: EIGRP_KEY
+      time: 00:01:00 Mar 1 2020 01:00:00 Sep 1 2020
+    19:
+      eigrp_key: EIGRP_KEY
+      time: 00:01:00 Sep 1 2020 01:00:00 Mar 1 2021
+    9990:
+      eigrp_key: EIGRP_KEY
+      time: 00:01:00 Mar 1 2021 infinite
+    9991:
+      eigrp_key: EIGRP_KEY
+      time: 00:01:00 Mar 1 2020 infinite
+
+#tacacs server mysql_variables
+TACACS:
+  JTF03-PSN-01:
+    ip: 192.168.0.1
+    key: tacacs_pass
+  JTF06-PSN-01:
+    ip: 192.168.0.1
+    key: tacacs_pass
+
+#This was added due to issues using the {% set %} in the .j2 templates
+requiredTunnels:
+  - 'Tunnel321' 
+  - 'Tunnel325'
+  - 'Tunnel3653'
+  - 'Tunnel3753'
+  - 'Tunnel12034'
+  - 'Tunnel19697'
+  - 'Tunnel148252'
+  - 'Tunnel30000'
+
+#Tunnel dictionary, for all typical MFS tunnels. Used in interface_tunnel.j2
+Tunnels:
+  Tunnel321:
+    description: DMVPN-SPOKE-TO-MAIN-PRI
+    bandwidth: 2500
+    mtu: 1380
+    zone_member: JBNCT
+    adjustmss: 1340
+    delay: 4000
+    source: "{{ tun_source }}"
+    mode: gre multipoint
+    protection: IPSEC-PROFILE-JMET-PRI
+    extra_lines:
+      - ip dhcp client client-id {{ tun_source }}
+      - ip dhcp client broadcast-flag clear
+      - ip address dhcp
+      - ip access-group KL-TO-MAIN-JMET out
+      - no ip redirects
+      - ip nhrp map multicast 192.168.0.1
+      - ip nhrp map 192.168.0.1 192.168.0.1
+      - ip nhrp network-id 321
+      - ip nhrp interest none
+      - ip nhrp nhs 192.168.0.1
+      - ip nhrp shortcut
+      - ip nhrp redirect
+      - nhrp group ADAPTIVE
+      - nhrp map group HUB service-policy output DMVPN-ADAPTIVE-PARENT
+      - tunnel key 321
+  Tunnel325:
+    description: DMVPN-SPOKE-TO-MAIN
+    bandwidth: 2500
+    mtu: 1380
+    zone_member: JBNCT
+    adjustmss: 1340
+    delay: 4500
+    source: "{{ tun_source }}"
+    mode: gre multipoint
+    protection: IPSEC-PROFILE-JMET-SEC
+    extra_lines:
+      - ip dhcp client client-id {{ tun_source }}
+      - ip dhcp client broadcast-flag clear
+      - ip address dhcp
+      - ip access-group KL-TO-MAIN-JMET out
+      - no ip redirects
+      - ip nhrp map multicast 192.168.0.1
+      - ip nhrp map 192.168.0.1 192.168.0.1
+      - ip nhrp network-id 321
+      - ip nhrp interest none
+      - ip nhrp nhs 192.168.0.1
+      - ip nhrp shortcut
+      - ip nhrp redirect
+      - nhrp group ADAPTIVE
+      - nhrp map group HUB service-policy output DMVPN-ADAPTIVE-PARENT
+      - tunnel key 325
+  Tunnel3653:
+    description: JDI DVTI HQ Primary Hub
+    bandwidth: 2000
+    mtu: 1300
+    zone_member: JDI
+    adjustmss: 1260
+    delay: 4000
+    source: "{{ JBNCT_last_usable }}"
+    mode: 'ipsec ipv4'
+    protection: JDI-DVTI-IPSEC-Profile
+    extra_lines:
+      - ip vrf forwading JDI
+      - ip unnumbered {{ JDI_tun_source }}
+      - tunnel destination 192.168.0.1
+  Tunnel3753:
+    description: JDI DVTI HQ Secondary Hub
+    bandwidth: 2000
+    mtu: 1300
+    zone_member: JDI
+    adjustmss: 1260
+    delay: 4001
+    source: "{{ JBNCT_last_usable }}"
+    mode: 'ipsec ipv4'
+    protection: JDI-DVTI-IPSEC-Profile
+    extra_lines:
+      - ip vrf forwading JDI
+      - ip unnumbered {{ JDI_tun_source }}
+      - tunnel destination 192.168.0.1
+  Tunnel12034:
+    description: iDirect-DMVPN-SPOKE-TO-T3
+    bandwidth: 2500
+    mtu: 1400
+    zone_member: JBNCT
+    adjustmss: 1360
+    delay: 4400
+    source: "{{ tun_source }}"
+    mode: gre multipoint
+    protection: IPSEC-PROFILE-JMET-T3
+    extra_lines:
+      - ip dhcp client client-id {{ tun_source }}
+      - ip dhcp client broadcast-flag clear
+      - ip address dhcp
+      - ip access-group KL-TO-T3-JMET out
+      - no ip redirects
+      - ip nhrp map multicast 192.168.0.1
+      - ip nhrp map 192.168.0.1 192.168.0.1
+      - ip nhrp network-id 3
+      - ip nhrp interest none
+      - ip nhrp nhs 192.168.0.1
+      - ip nhrp shortcut
+      - ip nhrp redirect
+      - nhrp group ADAPTIVE
+      - nhrp map group HUB service-policy output DMVPN-ADAPTIVE-PARENT
+      - tunnel key 3
+      - load-interval 30
+      - shutdown
+  Tunnel19697:
+    description: iDirect-DMVPN-SPOKE-TO-T6
+    bandwidth: 2500
+    mtu: 1400
+    zone_member: JBNCT
+    adjustmss: 1360
+    delay: 4400
+    source: "{{ tun_source }}"
+    mode: gre multipoint
+    protection: IPSEC-PROFILE-JMET-T6
+    extra_lines:
+      - ip dhcp client client-id ascii {{ hostname }}
+      - ip dhcp client broadcast-flag clear
+      - ip address dhcp
+      - ip access-group KL-TO-T6-JMET out
+      - no ip redirects
+      - ip nhrp map multicast 192.168.0.1
+      - ip nhrp map 192.168.0.1 192.168.0.1
+      - ip nhrp network-id 16
+      - ip nhrp interest none
+      - ip nhrp nhs 192.168.0.1
+      - ip nhrp shortcut
+      - ip nhrp redirect
+      - nhrp group ADAPTIVE
+      - nhrp map group HUB service-policy output DMVPN-ADAPTIVE-PARENT
+      - tunnel key 16
+      - load-interval 30
+      - shutdown
+  Tunnel148252:
+    description: iDirect-DMVPN-SPOKE-TO-T5
+    bandwidth: 2500
+    mtu: 1400
+    zone_member: JBNCT
+    adjustmss: 1360
+    delay: 4400
+    source: "{{ tun_source }}"
+    mode: gre multipoint
+    protection: IPSEC-PROFILE-JMET-T5
+    extra_lines:
+      - ip dhcp client client-id {{ tun_source }}
+      - ip dhcp client broadcast-flag clear
+      - ip address dhcp
+      - ip access-group KL-TO-T5-JMET out
+      - no ip redirects
+      - ip nhrp map multicast 192.168.0.1
+      - ip nhrp map 192.168.0.1 192.168.0.1
+      - ip nhrp network-id 5
+      - ip nhrp interest none
+      - ip nhrp nhs 192.168.0.1
+      - ip nhrp shortcut
+      - ip nhrp redirect
+      - nhrp group ADAPTIVE
+      - nhrp map group HUB service-policy output DMVPN-ADAPTIVE-PARENT
+      - tunnel key 5
+      - load-interval 30
+      - shutdown
+  Tunnel30000:
+    description: DUN DMVPN TO T3
+    bandwidth: 1000
+    mtu: 1300
+    zone_member: ISPC
+    adjustmss: 1260
+    delay: 4000
+    source: "{{ JBNCT_last_usable }}"
+    mode: gre multipoint
+    protection: IPSEC-PROFILE-DUN-T3
+    extra_lines:
+      - ip vrf forwarding ISP
+      - ip dhcp client client-id {{ ISP_tun_source }}
+      - ip dhcp client broadcast-flag clear
+      - ip address dhcp
+      - ip nhrp authentication P4750n5
+      - no ip redirects
+      - ip nhrp map multicast 192.168.0.1
+      - ip nhrp map 192.168.0.1 192.168.0.1
+      - ip nhrp network-id 30000
+      - ip nhrp interest 55
+      - ip nhrp nhs 192.168.0.1
+      - tunnel key 30000
+      - load-interval 30
+
+# Variables used to generate namedmode configuration template
+EIGRP_config:
+  PVT_NET:
+    2163:
+      interfaces:
+        - default
+        - Tunnel321
+        - Tunnel325
+        - Ethernet0/1.25
+        - Ethernet0.1/90
+        - Ethernet0/1.85
+      default:
+        - authentication mode md5
+        - authentication key-chain {{ enclave }}-Wan
+        - passive-interface
+      topology_base:
+        distribute_lists:
+          "EXPED-MAIN in":
+            - Ethernet0.1/90
+            - Tunnel321
+            - Tunnel325
+            - Ethernet0/1.25
+          "EXPED-OUT out":
+            - Ethernet0.1/90
+            - Tunnel321
+            - Tunnel325
+            - Ethernet0/1.25 
+        networks:
+          - 192.168.0.1 192.168.0.1
+          - 192.168.0.1 192.168.0.1
+          - 192.168.0.1
+        network_extra_lines:
+          - eigrp router-id {{ JBNCT_last_usable }}
+          - eigrp stub connected redistributed leak-map EXPED
+
+    250:
+      vrf: ISP
+      topology_base:
+        networks:
+          - 192.168.0.1 192.168.0.1
+          - "{{ ISP_network }} {{ ISP_mask }}"
+        network_extra_lines:
+          - eigrp router-id {{ ISP_last_usable }}
+          - eigrp stub connected
+    5:
+      vrf: JDI
+      interfaces:
+        - default
+        - Tunnel3753
+        - Tunnel3653
+      default:
+        - authentication mode md5
+        - authetication key-chain Jdi-Wan
+        - passive-interface
+      topology_base:
+        networks:
+          - "{{JDI_DATA_network }} {{JDI_DATA_mask }}"
+          - "{{JDI_VOICE_network }} {{ JDI_VOICE_mask }}"
+        network_extra_lines:
+          - eigrp router-id {{ JDI_DATA_last_usable }}
+          - eigrp stub connected leak-map JDI-LEAK
+
+prefix_lists:
+  EXPED-MAIN:
+    - 192.168.0.1/30
+    - 192.168.0.1/30
+    - 192.168.0.1/30
+    - 192.168.0.1/30
+    - 192.168.0.1/16
+    - 192.168.0.1/16
+    - 192.168.0.1/31
+    - 192.168.0.1/31
+    - 192.168.0.1/31
+  EXPED-OUT:
+    - 192.168.0.1/16 le 32
+  JDI-EXPED:
+    - 192.168.0.1/21 le 32
+    - 192.168.0.1/0
+
+#Below variables are used to generate route maps
+airvpn_entry_port: "{{ item.value.airvpn_entry_port }}"
+#"{{ 'Ethernet 0/1.25' if device_type == 'mfs_router' elif 'Vlan 25' if device_type == 'mfs_router_med' else 'FastEthernet0/0'}}"
+cis_vpn_entry_port: "{{ 'Ethernet 0/1.35' if device_type == 'mfs_router' else 'FastEthernet0/1' }}"
+
+#This was added due to issues using the {% set %} in the .j2 templates
+reqdACLs:
+  - 1
+  - 2
+  - 101
+  - 102
+  - 103
+  - 104
+  - 105
+  - 106
+  - 'CPP_CRITICAL'
+  - 'CPP_DEFAULT'
+  - 'CPP_IMPORTANT'
+  - 'CPP_NORMAL'
+  - 'CPP_UNDESIRABLE'
+  - 'ISP_LCL'
+  - 'NG_UDP_QOS_MATCH'
+  - 'ZFW-JBNCT-TO-JMET-ACL'
+  - 'ZFW-JBNCT-TO-SELF-ACL'
+  - 'ZFW-JDI-TO-JMET-ACL'
+  - 'ZFW-JBNCT-TO-JBNCT-ACL'
+  - 'ZFW-JMET-TO-JDI-ACL'
+  - 'ZFW-JMET-TO-SELF-ACL'
+  - 'ZFW-SELF-TO-ISPWAN-ACL'
+  - 'ZFW-SELF-TO-JBNCT-ACL'
+  - 'ZFW-SELF-TO-JMET-ACL'
+  - "{{ 'ZFW-ISPWAN-TO-JBNCT-ACL-Lite' if device_type == 'mfs_router_lite' else 'ZFW-ISPWAN-TO-JBNCT-ACL' }}"
+  - "{{ 'ZFW-ISPWAN-TO-SELF-ACL-Lite' if device_type == 'mfs_router_lite' else 'ZFW-ISPWAN-TO-SELF-ACL' }}"
+  - "{{ 'ZFW-JBNCT-TO-ISPWAN-ACL-Lite' if device_type == 'mfs_router_lite' else 'ZFW-JBNCT-TO-ISPWAN-ACL' }}"
+  - 'KL-TO-MAIN-JMET'
+  - 'KL-TO-T3-JMET'
+  - 'KL-TO-T5-JMET'
+  - 'KL-TO-T6-JMET'
+
+#ACL Dictionary, permits/remarks can be added at will down the line
+#Used by acl.j2, acl_extended.j2 and acl_standard.j2
+ACLs:  
+  1:
+    type: standard
+    lines:
+    - remark: CONTROL VTY
+    - permit:
+      - 192.168.0.1 192.168.0.1
+      - 192.168.0.1
+      - 192.168.0.1 192.168.0.1
+    - deny: any log
+
+  lite_1:
+    type: standard
+    lines:
+    - remark: CONTROL VTY
+    - permit:
+      - 192.168.0.1 192.168.0.1
+    - deny: any log
+  
+  2:
+    type: standard
+    lines:
+    - remark: CONTROL SNMP
+    - permit:
+      - 192.168.0.1
+    - deny: any
+
+  101:
+    type: standard
+    lines:
+    - remark: CIS1-VPN1 ENCRYPTION ACL
+    - permit:
+      - "{{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1"
+      - "{{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1"
+      - "{{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1"
+      - "{{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1"
+
+  102:
+    type: standard
+    lines:
+    - remark: AIR1 ENCRYPTION ACL
+    - permit:
+      - "{{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1"
+      - "{{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1"
+      - "{{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1"
+  
+  103:
+    type: standard
+    lines:
+    - remark: NAT TO INTERNET FOR CIS1-AIR1 AND AIR1 VPN
+    - deny:
+      - "{{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1"
+      - "{{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1"
+    - permit:  
+      - "{{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} any"
+  104:
+    type: standard
+    lines:
+    - remark: JDI-TO-JMET-NAT
+    - permit:
+      - "{{JDI_DATA_network }} {{ JDI_DATA_ACL_host_mask }} 192.168.0.1 192.168.0.1"
+    
+  105:
+    type: standard
+    lines:
+    - remark: AIR2 ENCRYPTION ACL - SWIFTBROADBAND
+    - permit:
+      - "{{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1"
+  
+  106:
+    type: standard
+    lines:
+      - remark: NAT ACL JBN TO JMET
+      - permit:
+        - "{{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1"
+
+  #CPP ACL Information. 
+  CPP_CRITICAL:
+    type: extended
+    lines:
+    - remark: IGP
+    - permit: 
+      - eigrp any any
+      - pim any any
+    - deny: ip any any
+
+  CPP_DEFAULT:
+    type: extended
+    lines:
+    - permit: ip any any
+
+  CPP_IMPORTANT:
+    type: extended
+    lines:
+    - remark: TACACS - SSH - TELNET - SNMP - NTP
+    - permit:
+      - "{{ 'tcp any host 192.168.0.1 eq 22' if device_type != 'mfs_router_lite' else '' }}"
+      - tcp any host {{ JBNCT_last_usable }} eq 22
+      - "{{ 'tcp any host 192.168.0.1 eq 22' if device_type == 'mfs_router' else '' }}" 
+      - "{{ 'tcp any host 192.168.0.1 eq telnet' if device_type == 'mfs_router' else '' }}"
+      - tcp host 192.168.0.1 eq tacacs any
+      - udp host 192.168.0.1 any eq snmp
+      - udp host 192.168.0.1 eq ntp any
+      - "{{ 'udp host ' +JBNCT_last_usable | ipmath(-1)+ ' eq ntp any' if device_type != 'mfs_router_lite' else '' }}"
+      - udp host 192.168.0.1 eq ntp any
+      - udp host 192.168.0.1 eq ntp any
+      - udp host 192.168.0.1 eq ntp any
+      - permit udp host 192.168.0.1 eq ntp any
+    - deny: ip any any 
+
+  CPP_NORMAL:
+    type: extended
+    lines:
+    - remark: CPP TRAFFIC
+    - permit:
+      - icmp any any echo
+      - icmp any any echo-reply
+      - icmp any any time-exceeded
+      - icmp any any unreachable
+    - deny: ip any any
+
+  CPP_UNDESIRABLE:
+    type: extended
+    lines:
+    - remark: BLOCK EXPLICITLY EXCEPTIONS AND OTHER IGP - EGP
+    - permit: 
+      - udp any any eq ntp
+      - udp any any eq snmptrap
+      - tcp any any eq 22
+      - tcp any any eq telnet
+      - ospf any any
+      - udp any any eq rip
+      - tcp any eq bgp any
+      - tcp any any eq bgp
+      - udp any host 192.168.0.1
+      - udp any host 192.168.0.1
+      - udp any any eq snmp
+      - pim any any
+      - tcp any any eq tacacs
+    - deny: ip any any
+
+  ISP_LCL:
+    type: extended
+    lines:
+    - permit:
+      - ip {{ ISP_network }} {{ ISP_ACL_host_mask }} any
+
+  NG_UDP_QOS_MATCH:
+    type: extended
+    lines:
+    - permit: udp any any
+
+  ZFW-ISPWAN-TO-JBNCT-ACL-Lite:
+    type: extended
+    lines:
+    - permit:
+      - udp any eq isakmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}  eq isakmp 
+      - esp any {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}  
+      - tcp host 192.168.0.1 eq tacacs any
+      - ip host 192.168.0.1 {{ JBNCT_last_usable }} {{ JBNCT_ACL_hostmask }}
+      - icmp 192.168.0.1 192.168.0.1 {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}
+      - icmp 192.168.0.1 192.168.0.1 {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}
+
+  ZFW-ISPWAN-TO-SELF-ACL-Lite:
+    type: extended
+    lines:
+    - permit:
+      - udp any eq isakmp host {{ JBNCT_last_usable }} eq isakmp
+      - esp any host {{ JBNCT_last_usable }} 
+      - udp host 192.168.0.1 any eq isakmp
+      - udp host 192.168.0.1 any eq non500-isakmp
+      - udp host 192.168.0.1 any eq isakmp
+      - udp host 192.168.0.1 any eq non500-isakmp
+      - udp any any eq bootpc
+      - icmp host 192.168.0.1 any echo-reply
+      - tcp 192.168.0.1 192.168.0.1 host {{ JBNCT_last_usable }} eq 22 
+      - udp host 192.168.0.1 any eq isakmp
+      - udp host 192.168.0.1 any eq non500-isakmp
+      - udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable | ipmath(-1) }} eq ntp 
+      - udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable | ipmath(-1) }} eq ntp 
+      - udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable | ipmath(-1) }} eq ntp 
+      - eigrp 192.168.0.1 192.168.0.1 192.168.0.1 192.168.0.1
+      - tcp 192.168.0.1 192.168.0.1 eq 22 host {{ JBNCT_last_usable }}
+      - icmp 192.168.0.1 192.168.0.1 host {{ JBNCT_last_usable }} 
+      - tcp host 192.168.0.1 eq tacacs any
+      - udp host 192.168.0.1 host {{ JBNCT_last_usable }} 
+      - ip host 192.168.0.1 any
+      - icmp 192.168.0.1 192.168.0.1 {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}
+      - icmp 192.168.0.1 192.168.0.1 {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}
+
+  ZFW-JBNCT-TO-ISPWAN-ACL-Lite:
+    type: extended
+    lines:
+    - permit:
+      - udp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}  eq isakmp any eq isakmp 
+      - esp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}  any 
+      - icmp any host 192.168.0.1 echo
+      - tcp any host 192.168.0.1 eq tacacs
+      - ip {{ JBNCT_last_usable }} {{ JBNCT_ACL_hostmask }} host 192.168.0.1
+      - icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1 echo
+      - icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1 echo-reply
+      - icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1 echo
+      - icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1 echo-reply
+
+  ZFW-JBNCT-TO-JMET-ACL:
+    type: extended
+    lines:
+    - permit:
+      - ip any any
+
+  ZFW-JBNCT-TO-SELF-ACL:
+    type: extended
+    lines:
+    - permit:
+      - ip any any
+
+  ZFW-JDI-TO-JMET-ACL:
+    type: extended
+    lines:
+    - permit:
+      - tcp any 192.168.0.1 192.168.0.1 eq 2494
+      - tcp any 192.168.0.1 192.168.0.1 eq 9401
+      - tcp any 192.168.0.1 192.168.0.1 eq 9402
+      - tcp any 192.168.0.1 192.168.0.1 eq 9403
+      - tcp any 192.168.0.1 192.168.0.1 eq 1492
+      - tcp any 192.168.0.1 192.168.0.1 eq 1462
+      - tcp any 192.168.0.1 192.168.0.1 eq telnet
+      - icmp any 192.168.0.1 192.168.0.1 echo
+
+  ZFW-JBNCT-TO-JBNCT-ACL:
+    type: extended
+    lines:
+    - permit:
+      - ip any any
+
+  ZFW-JMET-TO-JDI-ACL:
+    type: extended
+    lines:
+    - permit:
+      - tcp 192.168.0.1 192.168.0.1 eq 2494 any
+      - tcp 192.168.0.1 192.168.0.1 eq 9401 any
+      - tcp 192.168.0.1 192.168.0.1 eq 9402 any
+      - tcp 192.168.0.1 192.168.0.1 eq 9403 any
+      - tcp 192.168.0.1 192.168.0.1 eq 1492 any
+      - tcp 192.168.0.1 192.168.0.1 eq 1462 any
+      - tcp 192.168.0.1 192.168.0.1 eq telnet any
+      - icmp 192.168.0.1 192.168.0.1 any echo-reply
+
+  ZFW-JMET-TO-SELF-ACL:
+    type: extended
+    lines:
+    - permit:
+      - gre host 192.168.0.1 192.168.0.1 192.168.0.1
+      - gre host 192.168.0.1 192.168.0.1 192.168.0.1
+      - icmp 192.168.0.1 192.168.0.1 192.168.0.1 192.168.0.1 echo
+      - icmp 192.168.0.1 192.168.0.1 192.168.0.1 192.168.0.1 echo-reply
+      - icmp 192.168.0.1 192.168.0.1 192.168.0.1 192.168.0.1 unreachable
+      - udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable }} eq ntp 
+      - udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable }} eq ntp 
+      - udp 192.168.0.1 192.168.0.1 any eq 9001
+      - udp 192.168.0.1 192.168.0.1 any eq 2860
+      - udp any any eq bootpc
+      - udp host 192.168.0.1 eq isakmp any eq isakmp
+      - udp host 192.168.0.1 eq isakmp any eq isakmp
+      - udp host 192.168.0.1 any eq isakmp
+      - udp host 192.168.0.1 any eq isakmp
+      - udp host 192.168.0.1 any eq non500-isakmp
+      - udp host 192.168.0.1 any eq non500-isakmp
+      - esp host 192.168.0.1 any
+      - esp host 192.168.0.1 any
+      - gre host 192.168.0.1 192.168.0.1 192.168.0.1
+      - udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable }} eq ntp 
+      - udp host 192.168.0.1 eq isakmp any eq isakmp
+      - udp host 192.168.0.1 any eq isakmp
+      - udp host 192.168.0.1 any eq non500-isakmp
+      - esp host 192.168.0.1 any
+      - gre host 192.168.0.1 192.168.0.1 192.168.0.1
+      - udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable }} eq ntp 
+      - udp host 192.168.0.1 eq isakmp any eq isakmp
+      - udp host 192.168.0.1 any eq isakmp
+      - udp host 192.168.0.1 any eq non500-isakmp
+      - esp host 192.168.0.1 any
+      - gre host 192.168.0.1 192.168.0.1 192.168.0.1
+      - udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable }} eq ntp 
+      - udp host 192.168.0.1 eq isakmp any eq isakmp
+      - udp host 192.168.0.1 any eq isakmp
+      - udp host 192.168.0.1 any eq non500-isakmp
+      - esp host 192.168.0.1 any
+
+  ZFW-SELF-TO-ISPWAN-ACL:
+    type: extended
+    lines:
+    - permit:
+      - udp host {{ JBNCT_last_usable }} eq isakmp any eq isakmp
+      - esp host {{ JBNCT_last_usable }} any
+      - udp any host 192.168.0.1 eq non500-isakmp
+      - udp any eq isakmp host 192.168.0.1
+      - udp any host 192.168.0.1 eq non500-isakmp
+      - udp any eq isakmp host 192.168.0.1
+      - udp any any eq bootps
+      - icmp any host 192.168.0.1 echo
+      - tcp host {{ JBNCT_last_usable }} eq 22 192.168.0.1 192.168.0.1 
+      - udp host {{ JBNCT_last_usable }} eq ntp host 192.168.0.1 eq ntp
+      - udp host {{ JBNCT_last_usable }} eq ntp host 192.168.0.1 eq ntp 
+      - udp host {{ JBNCT_last_usable }} eq ntp host 192.168.0.1 eq ntp 
+      - tcp host {{ JBNCT_last_usable }} 192.168.0.1 192.168.0.1 eq 22 
+      - udp any host 192.168.0.1 eq non500-isakmp
+      - udp any eq isakmp host 192.168.0.1
+      - eigrp 192.168.0.1 192.168.0.1 192.168.0.1 192.168.0.1
+      - icmp host {{ JBNCT_last_usable }} 192.168.0.1 192.168.0.1 echo 
+      - icmp host {{ JBNCT_last_usable }} 192.168.0.1 192.168.0.1 echo-reply
+      - tcp any host 192.168.0.1 eq tacacs
+      - udp host {{ JBNCT_last_usable }} host 192.168.0.1 eq 515 
+      - udp host {{ JBNCT_last_usable }} eq snmp host 192.168.0.1
+      - icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1 echo
+      - icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1 echo-reply
+      - icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1 echo
+      - icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1 echo-reply
+  
+
+  ZFW-SELF-TO-JBNCT-ACL:
+    type: extended
+    lines:
+    - permit:
+      - ip any any
+  
+  ZFW-SELF-TO-JMET-ACL:
+    type: extended
+    lines:
+    - permit:
+      - gre 192.168.0.1 192.168.0.1 host 192.168.0.1
+      - gre 192.168.0.1 192.168.0.1 host 192.168.0.1
+      - icmp 192.168.0.1 192.168.0.1 192.168.0.1 192.168.0.1 echo
+      - icmp 192.168.0.1 192.168.0.1 192.168.0.1 192.168.0.1 echo-reply
+      - icmp 192.168.0.1 192.168.0.1 192.168.0.1 192.168.0.1 unreachable
+      - udp host {{ JBNCT_last_usable }} eq ntp host 192.168.0.1 eq ntp
+      - udp host {{ JBNCT_last_usable }} eq ntp host 192.168.0.1 eq ntp 
+      - tcp any 192.168.0.1 192.168.0.1
+      - udp any 192.168.0.1 192.168.0.1
+      - udp any any eq bootps
+      - udp any eq isakmp host 192.168.0.1
+      - udp any eq isakmp host 192.168.0.1
+      - udp any host 192.168.0.1 eq non500-isakmp
+      - udp any host 192.168.0.1 eq non500-isakmp
+      - esp any host 192.168.0.1
+      - esp any host 192.168.0.1
+      - gre 192.168.0.1 192.168.0.1 host 192.168.0.1
+      - udp host {{ JBNCT_last_usable }} eq ntp host 192.168.0.1 eq ntp 
+      - udp any eq isakmp host 192.168.0.1
+      - udp any host 192.168.0.1 eq non500-isakmp
+      - esp any host 192.168.0.1
+      - gre 192.168.0.1 192.168.0.1 host 192.168.0.1
+      - udp host {{ JBNCT_last_usable }} eq ntp host 192.168.0.1 eq ntp
+      - udp any eq isakmp host 192.168.0.1
+      - udp any host 192.168.0.1 eq non500-isakmp
+      - esp any host 192.168.0.1
+      - gre 192.168.0.1 192.168.0.1 host 192.168.0.1
+      - udp host {{ JBNCT_last_usable }} eq ntp host 192.168.0.1 eq ntp 
+      - udp any eq isakmp host 192.168.0.1
+      - udp any host 192.168.0.1 eq non500-isakmp
+      - esp any host 192.168.0.1
+
+  ZFW-ISPWAN-TO-JBNCT-ACL:
+    type: extended
+    lines:
+    - permit:
+      -  udp any eq isakmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}  eq isakmp
+      -  esp any {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 
+      -  udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable }} eq ntp
+      -  udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable }} eq ntp
+      -  udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable }} eq ntp
+      -  tcp host 192.168.0.1 eq tacacs any
+      -  icmp 192.168.0.1 192.168.0.1 {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}
+      -  icmp 192.168.0.1 192.168.0.1 {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}
+
+  ZFW-ISPWAN-TO-SELF-ACL:
+    type: extended
+    lines:
+    - permit:
+      -  udp any eq isakmp host {{ JBNCT_last_usable }} eq isakmp
+      -  esp any host {{ JBNCT_last_usable }}
+      -  udp host 192.168.0.1 any eq isakmp
+      -  udp host 192.168.0.1 any eq non500-isakmp
+      -  udp host 192.168.0.1 any eq isakmp
+      -  udp host 192.168.0.1 any eq non500-isakmp
+      -  udp any any eq bootpc
+      -  icmp host 192.168.0.1 any echo-reply
+      -  tcp 192.168.0.1 192.168.0.1 host {{ JBNCT_last_usable }} eq 22
+      -  udp host 192.168.0.1 any eq isakmp
+      -  udp host 192.168.0.1 any eq non500-isakmp
+      -  udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable }} eq ntp
+      -  udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable }} eq ntp
+      -  udp host 192.168.0.1 eq ntp host {{ JBNCT_last_usable }} eq ntp
+      -  eigrp 192.168.0.1 192.168.0.1 192.168.0.1 192.168.0.1
+      -  tcp 192.168.0.1 192.168.0.1 eq 22 host {{ JBNCT_last_usable }}
+      -  icmp 192.168.0.1 192.168.0.1 host {{ JBNCT_last_usable }}
+      -  tcp host 192.168.0.1 eq tacacs any
+      -  udp host 192.168.0.1 host {{ JBNCT_last_usable }}
+      -  icmp 192.168.0.1 192.168.0.1 {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}
+      -  icmp 192.168.0.1 192.168.0.1 {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}
+
+  ZFW-JBNCT-TO-ISPWAN-ACL:
+    type: extended
+    lines:
+    - permit:
+      -  udp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}  eq isakmp any eq isakmp
+      -  esp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }}  any
+      -  udp host  {{ JBNCT_last_usable | ipmath(-1) }} eq ntp host 192.168.0.1 eq ntp
+      -  udp host  {{ JBNCT_last_usable | ipmath(-1) }} eq ntp host 192.168.0.1 eq ntp
+      -  udp host  {{ JBNCT_last_usable | ipmath(-1) }} eq ntp host 192.168.0.1 eq ntp
+      -  icmp any host 192.168.0.1 echo
+      -  tcp any host 192.168.0.1 eq tacacs
+      -  icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1 echo
+      -  icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1 echo-reply
+      -  icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1 echo
+      -  icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} 192.168.0.1 192.168.0.1 echo-reply
+      -  udp host  {{ JBNCT_last_usable | ipmath(-1) }} host 192.168.0.1 eq 515
+  
+  KL-TO-MAIN-JMET:
+    type: extended
+    lines:
+    - permit:
+      - ip host {{ JBNCT_network | ipmath(1) }} 192.168.0.1 192.168.0.1
+      - ip host {{ JBNCT_network | ipmath(2) }} 192.168.0.1 192.168.0.1 
+      - permit icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} any echo-reply
+      - icmp {{ JBNCT_network }} {{ JBNCT_ACL_hostmask }} any echo
+    - deny:
+      - ip host {{ JBNCT_network | ipmath(1) }} any
+      - ip host {{ JBNCT_network | ipmath(2) }} any
+    - permit: ip any any
+
+  KL-TO-T3-JMET:
+    type: extended
+    lines:
+    - permit:
+      - ip host {{ JBNCT_network | ipmath(1) }} host 192.168.0.1
+      - ip host {{ JBNCT_network | ipmath(2) }} host 192.168.0.1
+      - icmp host {{ JBNCT_network | ipmath(1) }} any echo-reply
+      - icmp host {{ JBNCT_network | ipmath(2) }} any echo-reply
+      - icmp host {{ JBNCT_network | ipmath(1) }} any echo
+      - icmp host {{ JBNCT_network | ipmath(2) }} any echo
+    - deny:
+      - ip host {{ JBNCT_network | ipmath(1) }} any
+      - ip host {{ JBNCT_network | ipmath(1) }} any
+    - permit: ip any any
+
+  KL-TO-T5-JMET:
+    type: extended
+    lines:
+    - permit:
+      - ip host {{ JBNCT_network | ipmath(1) }} host 192.168.0.1
+      - ip host {{ JBNCT_network | ipmath(2) }} host 192.168.0.1
+      - ip host {{ JBNCT_network | ipmath(1) }} host 192.168.0.1
+      - ip host {{ JBNCT_network | ipmath(2) }}  host 192.168.0.1
+      - ip host {{ JBNCT_network | ipmath(1) }} host 192.168.0.1
+      - ip host {{ JBNCT_network | ipmath(2) }}  host 192.168.0.1
+      - icmp host {{ JBNCT_network | ipmath(1) }} any echo-reply
+      - icmp host {{ JBNCT_network | ipmath(2) }}  any echo-reply
+      - icmp host {{ JBNCT_network | ipmath(1) }} any echo
+      - icmp host {{ JBNCT_network | ipmath(2) }}  any echo
+    - deny:
+      - ip host {{ JBNCT_network | ipmath(1) }} any
+      - ip host {{ JBNCT_network | ipmath(2) }}  any
+    -permit: ip any any
+
+  KL-TO-T6-JMET:
+    type: extended
+    lines:
+    - permit:
+      - ip host  {{ JBNCT_network | ipmath(1) }}  host 192.168.0.1
+      - ip host {{ JBNCT_network | ipmath(2) }} host 192.168.0.1
+      - ip host  {{ JBNCT_network | ipmath(1) }}  host 192.168.0.1
+      - ip host {{ JBNCT_network | ipmath(2) }} host 192.168.0.1
+      - icmp host  {{ JBNCT_network | ipmath(1) }}  any echo-reply
+      - icmp host {{ JBNCT_network | ipmath(2) }} any echo-reply
+      - icmp host  {{ JBNCT_network | ipmath(1) }} any echo
+      - icmp host {{ JBNCT_network | ipmath(2) }} any echo
+    - deny:
+      - ip host  {{ JBNCT_network | ipmath(1) }}  any
+      - ip host {{ JBNCT_network | ipmath(2) }} any
+    - permit: ip any any
+
+#The below keys are encrypted pre-shared keys and isakmp keys 
+commadmin_password: password
+snmp_priv: snmp_priv
+snmp_auth: snmp_auth
+
+JMET_HUB_PRI_KEY: pre_shared_key
+
+JMET_HUB_SEC_KEY: pre_shared_key
+
+EXPED_HUB_NC: pre_shared_key
+
+MAINHUB1_KEY: pre_shared_key
+
+MAINHUB2_KEY: pre_shared_key
+
+DUN_RMT_KEY: pre_shared_key
+
+CIS_KEY: pre_shared_key
+
+AIR_KEY: pre_shared_key
+      
+AIR2_SBB_KEY: pre_shared_key
+
